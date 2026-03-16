@@ -149,7 +149,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-sy
 .btn:hover { background: var(--btn-hover); border-color: var(--border); }
 .btn.active { background: var(--btn-active-bg); border-color: var(--btn-active-border); color: var(--btn-active-text); }
 .btn svg { width: 14px; height: 14px; }
-#toolbar .right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 #status-bar {
   font-size: 11px; color: var(--text-muted); padding: 0 8px;
 }
@@ -242,21 +241,21 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-sy
     <div class="sep"></div>
     <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
     <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
-    <div class="right">
-      <span id="status-bar"></span>
-      <button class="btn" id="btn-import" title="Import .owm file">Import</button>
-      <button class="btn" id="btn-export" title="Export as .owm file">Export</button>
-      <button class="btn" id="btn-share" title="Copy shareable embed URL">Share</button>
-      <div class="sep"></div>
-      <button class="btn" id="btn-contrast" title="Toggle high contrast lines">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor"/></svg>
-        Contrast
-      </button>
-      <button class="btn" id="btn-theme" title="Toggle light/dark mode">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <span id="theme-label">Dark</span>
-      </button>
-    </div>
+    <div class="sep"></div>
+    <button class="btn" id="btn-import" title="Import .owm file">Import</button>
+    <button class="btn" id="btn-export" title="Export as .owm file">Export</button>
+    <button class="btn" id="btn-share" title="Copy shareable embed URL">Share</button>
+    <div class="sep"></div>
+    <button class="btn" id="btn-contrast" title="Toggle high contrast lines">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor"/></svg>
+      Contrast
+    </button>
+    <button class="btn" id="btn-theme" title="Toggle light/dark mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <span id="theme-label">Dark</span>
+    </button>
+    <div class="sep"></div>
+    <span id="status-bar"></span>
   </div>
   <div id="map-container">
     <svg id="map-svg" xmlns="http://www.w3.org/2000/svg"></svg>
