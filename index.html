@@ -5,68 +5,185 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wardley Map Widget</title>
 <style>
+/* ── Theme Variables ─────────────────────────────────── */
+:root {
+  /* Light theme (default) */
+  --bg: #ffffff;
+  --bg-toolbar: #f7f7f7;
+  --text: #333333;
+  --text-muted: #888888;
+  --border: #e0e0e0;
+  --border-light: #ddd;
+  --btn-bg: #ffffff;
+  --btn-hover: #eeeeee;
+  --btn-active-bg: #e0edff;
+  --btn-active-border: #4a9eff;
+  --btn-active-text: #1a6ed8;
+  --input-focus-bg: #ffffff;
+  --accent: #4a9eff;
+  --danger: #e74c3c;
+  --menu-hover: #f0f4ff;
+  --menu-sep: #eeeeee;
+  --toast-bg: #333333;
+  --toast-text: #ffffff;
+  /* Map colours */
+  --axis-line: #cccccc;
+  --axis-label: #999999;
+  --axis-stage: #bbbbbb;
+  --axis-title: #888888;
+  --evo-sep: #e8e8e8;
+  --node-fill: #ffffff;
+  --node-stroke: #333333;
+  --node-label: #333333;
+  --node-label-hover: #1a6ed8;
+  --anchor-fill: #ff6b6b;
+  --anchor-stroke: #c0392b;
+  --select-fill: #e0edff;
+  --select-anchor-fill: #ffaaaa;
+  --pipeline-fill: rgba(200, 200, 200, 0.15);
+  --pipeline-stroke: #bbbbbb;
+  --edge-stroke: #999999;
+  --edge-label: #777777;
+  --edge-width: 1.5;
+  --node-stroke-width: 2;
+}
+
+/* ── Dark theme ──────────────────────────────────────── */
+html.dark {
+  --bg: #1e1e1e;
+  --bg-toolbar: #2a2a2a;
+  --text: #e0e0e0;
+  --text-muted: #888888;
+  --border: #444444;
+  --border-light: #555555;
+  --btn-bg: #333333;
+  --btn-hover: #444444;
+  --btn-active-bg: #1a3a5c;
+  --btn-active-border: #4a9eff;
+  --btn-active-text: #6bb5ff;
+  --input-focus-bg: #2a2a2a;
+  --accent: #4a9eff;
+  --danger: #ff6b6b;
+  --menu-hover: #333344;
+  --menu-sep: #444444;
+  --toast-bg: #e0e0e0;
+  --toast-text: #1e1e1e;
+  --axis-line: #555555;
+  --axis-label: #888888;
+  --axis-stage: #666666;
+  --axis-title: #aaaaaa;
+  --evo-sep: #333333;
+  --node-fill: #2a2a2a;
+  --node-stroke: #cccccc;
+  --node-label: #e0e0e0;
+  --node-label-hover: #6bb5ff;
+  --anchor-fill: #cc4444;
+  --anchor-stroke: #ff6b6b;
+  --select-fill: #1a3a5c;
+  --select-anchor-fill: #5c2020;
+  --pipeline-fill: rgba(100, 100, 100, 0.2);
+  --pipeline-stroke: #666666;
+  --edge-stroke: #888888;
+  --edge-label: #999999;
+}
+
+/* ── High contrast modifier (works with both light & dark) ── */
+html.high-contrast {
+  --axis-line: #666666;
+  --axis-label: #555555;
+  --axis-stage: #666666;
+  --axis-title: #444444;
+  --evo-sep: #cccccc;
+  --node-stroke: #000000;
+  --node-label: #000000;
+  --anchor-stroke: #990000;
+  --pipeline-stroke: #666666;
+  --edge-stroke: #444444;
+  --edge-label: #333333;
+  --edge-width: 2.5;
+  --node-stroke-width: 3;
+}
+html.dark.high-contrast {
+  --axis-line: #aaaaaa;
+  --axis-label: #cccccc;
+  --axis-stage: #bbbbbb;
+  --axis-title: #dddddd;
+  --evo-sep: #666666;
+  --node-stroke: #ffffff;
+  --node-label: #ffffff;
+  --anchor-fill: #ff4444;
+  --anchor-stroke: #ff8888;
+  --pipeline-stroke: #aaaaaa;
+  --edge-stroke: #cccccc;
+  --edge-label: #dddddd;
+  --edge-width: 2.5;
+  --node-stroke-width: 3;
+}
+
 /* ── Reset & Base ────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #333; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); transition: background 0.2s, color 0.2s; }
 #app { width: 100%; height: 100%; display: flex; flex-direction: column; }
 
 /* ── Toolbar ─────────────────────────────────────────── */
 #toolbar {
   display: flex; align-items: center; gap: 4px; padding: 6px 10px;
-  background: #f7f7f7; border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-toolbar); border-bottom: 1px solid var(--border);
   flex-shrink: 0; flex-wrap: wrap; z-index: 10;
+  transition: background 0.2s, border-color 0.2s;
 }
 #toolbar .title-input {
   font-size: 14px; font-weight: 600; border: 1px solid transparent;
   background: transparent; padding: 4px 8px; border-radius: 4px; min-width: 180px;
+  color: var(--text);
 }
-#toolbar .title-input:hover { border-color: #ccc; }
-#toolbar .title-input:focus { border-color: #4a9eff; outline: none; background: #fff; }
-#toolbar .sep { width: 1px; height: 24px; background: #ddd; margin: 0 4px; }
+#toolbar .title-input:hover { border-color: var(--border-light); }
+#toolbar .title-input:focus { border-color: var(--accent); outline: none; background: var(--input-focus-bg); }
+#toolbar .sep { width: 1px; height: 24px; background: var(--border-light); margin: 0 4px; }
 .btn {
   display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px;
-  font-size: 12px; border: 1px solid #ccc; border-radius: 4px;
-  background: #fff; cursor: pointer; color: #333; white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  font-size: 12px; border: 1px solid var(--border-light); border-radius: 4px;
+  background: var(--btn-bg); cursor: pointer; color: var(--text); white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.btn:hover { background: #eee; border-color: #bbb; }
-.btn.active { background: #e0edff; border-color: #4a9eff; color: #1a6ed8; }
+.btn:hover { background: var(--btn-hover); border-color: var(--border); }
+.btn.active { background: var(--btn-active-bg); border-color: var(--btn-active-border); color: var(--btn-active-text); }
 .btn svg { width: 14px; height: 14px; }
 #toolbar .right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 #status-bar {
-  font-size: 11px; color: #888; padding: 0 8px;
+  font-size: 11px; color: var(--text-muted); padding: 0 8px;
 }
 
 /* ── SVG Container ───────────────────────────────────── */
-#map-container { flex: 1; position: relative; overflow: hidden; cursor: default; }
+#map-container { flex: 1; position: relative; overflow: hidden; cursor: default; background: var(--bg); transition: background 0.2s; }
 #map-svg { width: 100%; height: 100%; }
 
 /* ── SVG Styles ──────────────────────────────────────── */
-.axis-line { stroke: #ccc; stroke-width: 1; }
-.axis-label { font-size: 11px; fill: #999; font-family: inherit; }
-.axis-stage-label { font-size: 10px; fill: #bbb; font-family: inherit; text-anchor: middle; }
-.axis-title { font-size: 11px; fill: #888; font-family: inherit; font-weight: 600; }
-.evolution-separator { stroke: #e8e8e8; stroke-width: 1; stroke-dasharray: 4 4; }
+.axis-line { stroke: var(--axis-line); stroke-width: 1; }
+.axis-label { font-size: 11px; fill: var(--axis-label); font-family: inherit; }
+.axis-stage-label { font-size: 10px; fill: var(--axis-stage); font-family: inherit; text-anchor: middle; }
+.axis-title { font-size: 11px; fill: var(--axis-title); font-family: inherit; font-weight: 600; }
+.evolution-separator { stroke: var(--evo-sep); stroke-width: 1; stroke-dasharray: 4 4; }
 
 .component-node { cursor: grab; }
 .component-node:active { cursor: grabbing; }
-.component-circle { fill: #fff; stroke: #333; stroke-width: 2; r: 6; }
-.component-circle.anchor { fill: #ff6b6b; stroke: #c0392b; }
-.component-circle:hover { stroke-width: 3; }
-.component-circle.selected { stroke: #4a9eff; stroke-width: 3; fill: #e0edff; }
-.component-circle.selected.anchor { fill: #ffaaaa; }
-.component-label { font-size: 11px; fill: #333; font-family: inherit; pointer-events: all; cursor: pointer; }
-.component-label:hover { fill: #1a6ed8; }
+.component-circle { fill: var(--node-fill); stroke: var(--node-stroke); stroke-width: var(--node-stroke-width); r: 6; transition: stroke 0.2s, fill 0.2s; }
+.component-circle.anchor { fill: var(--anchor-fill); stroke: var(--anchor-stroke); }
+.component-circle:hover { stroke-width: calc(var(--node-stroke-width) + 1); }
+.component-circle.selected { stroke: var(--accent); stroke-width: calc(var(--node-stroke-width) + 1); fill: var(--select-fill); }
+.component-circle.selected.anchor { fill: var(--select-anchor-fill); }
+.component-label { font-size: 11px; fill: var(--node-label); font-family: inherit; pointer-events: all; cursor: pointer; transition: fill 0.2s; }
+.component-label:hover { fill: var(--node-label-hover); }
 
-.pipeline-rect { fill: rgba(200, 200, 200, 0.15); stroke: #bbb; stroke-width: 1.5; stroke-dasharray: 6 3; rx: 6; ry: 6; }
+.pipeline-rect { fill: var(--pipeline-fill); stroke: var(--pipeline-stroke); stroke-width: 1.5; stroke-dasharray: 6 3; rx: 6; ry: 6; }
 
-.edge-line { stroke: #999; stroke-width: 1.5; fill: none; }
-.edge-line:hover { stroke: #4a9eff; stroke-width: 2.5; }
-.edge-line.selected { stroke: #4a9eff; stroke-width: 2.5; }
+.edge-line { stroke: var(--edge-stroke); stroke-width: var(--edge-width); fill: none; transition: stroke 0.2s; }
+.edge-line:hover { stroke: var(--accent); stroke-width: calc(var(--edge-width) + 1); }
+.edge-line.selected { stroke: var(--accent); stroke-width: calc(var(--edge-width) + 1); }
 .edge-hit-area { stroke: transparent; stroke-width: 12; fill: none; cursor: pointer; }
-.edge-label { font-size: 9px; fill: #777; font-family: inherit; }
+.edge-label { font-size: 9px; fill: var(--edge-label); font-family: inherit; }
 
-.edge-preview { stroke: #4a9eff; stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; pointer-events: none; }
+.edge-preview { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; pointer-events: none; }
 
 /* ── Inline edit overlay ─────────────────────────────── */
 #inline-edit {
@@ -74,27 +191,28 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-sy
 }
 #inline-edit input {
   font-size: 12px; font-family: inherit; padding: 2px 6px;
-  border: 2px solid #4a9eff; border-radius: 3px; outline: none;
-  min-width: 120px; background: #fff;
+  border: 2px solid var(--accent); border-radius: 3px; outline: none;
+  min-width: 120px; background: var(--bg); color: var(--text);
 }
 
 /* ── Context menu ────────────────────────────────────── */
 #context-menu {
   position: absolute; display: none; z-index: 30;
-  background: #fff; border: 1px solid #ddd; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border-light); border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.12); padding: 4px 0; min-width: 150px;
 }
 #context-menu .menu-item {
   padding: 6px 14px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  color: var(--text);
 }
-#context-menu .menu-item:hover { background: #f0f4ff; }
-#context-menu .menu-item.danger { color: #e74c3c; }
-#context-menu .menu-sep { height: 1px; background: #eee; margin: 4px 0; }
+#context-menu .menu-item:hover { background: var(--menu-hover); }
+#context-menu .menu-item.danger { color: var(--danger); }
+#context-menu .menu-sep { height: 1px; background: var(--menu-sep); margin: 4px 0; }
 
 /* ── Toast ───────────────────────────────────────────── */
 #toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: #333; color: #fff; padding: 8px 18px; border-radius: 6px;
+  background: var(--toast-bg); color: var(--toast-text); padding: 8px 18px; border-radius: 6px;
   font-size: 12px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 40;
 }
 #toast.show { opacity: 1; }
@@ -129,6 +247,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-sy
       <button class="btn" id="btn-import" title="Import .owm file">Import</button>
       <button class="btn" id="btn-export" title="Export as .owm file">Export</button>
       <button class="btn" id="btn-share" title="Copy shareable embed URL">Share</button>
+      <div class="sep"></div>
+      <button class="btn" id="btn-contrast" title="Toggle high contrast lines">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor"/></svg>
+        Contrast
+      </button>
+      <button class="btn" id="btn-theme" title="Toggle light/dark mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span id="theme-label">Dark</span>
+      </button>
     </div>
   </div>
   <div id="map-container">
@@ -1004,6 +1131,40 @@ function showToast(msg) {
       // Fallback: show URL in prompt
       prompt('Copy this URL:', url);
     });
+  };
+
+  // ── Theme controls ──
+  const THEME_KEY = 'wardley-widget-theme';
+  const CONTRAST_KEY = 'wardley-widget-contrast';
+  const themeLabel = document.getElementById('theme-label');
+
+  function applyTheme() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const isHC = document.documentElement.classList.contains('high-contrast');
+    themeLabel.textContent = isDark ? 'Light' : 'Dark';
+    document.getElementById('btn-theme').title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+    document.getElementById('btn-contrast').classList.toggle('active', isHC);
+    try {
+      localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+      localStorage.setItem(CONTRAST_KEY, isHC ? 'high' : 'normal');
+    } catch(e) {}
+  }
+
+  // Restore saved preferences
+  try {
+    if (localStorage.getItem(THEME_KEY) === 'dark') document.documentElement.classList.add('dark');
+    if (localStorage.getItem(CONTRAST_KEY) === 'high') document.documentElement.classList.add('high-contrast');
+  } catch(e) {}
+  applyTheme();
+
+  document.getElementById('btn-theme').onclick = () => {
+    document.documentElement.classList.toggle('dark');
+    applyTheme();
+  };
+
+  document.getElementById('btn-contrast').onclick = () => {
+    document.documentElement.classList.toggle('high-contrast');
+    applyTheme();
   };
 
   // ── Resize handling ──
