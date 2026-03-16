@@ -133,8 +133,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-sy
   </div>
   <div id="map-container">
     <svg id="map-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="inline-edit"><input id="inline-edit-input" type="text"></div>
   </div>
-  <div id="inline-edit"><input id="inline-edit-input" type="text"></div>
   <div id="context-menu"></div>
   <div id="toast"></div>
 </div>
@@ -665,33 +665,46 @@ function showToast(msg) {
   }
 
   // ── Inline editing ──
+  let inlineEditReady = false;
   function showInlineEdit(x, y, currentValue, onCommit) {
+    inlineEditReady = false;
     inlineEdit.style.display = 'block';
     inlineEdit.style.left = x + 'px';
     inlineEdit.style.top = y + 'px';
     inlineEditInput.value = currentValue;
-    inlineEditInput.focus();
-    inlineEditInput.select();
 
-    function commit() {
-      const val = inlineEditInput.value.trim();
-      inlineEdit.style.display = 'none';
+    // Defer focus to after the mousedown/mouseup cycle completes
+    setTimeout(() => {
+      inlineEditInput.focus();
+      inlineEditInput.select();
+      inlineEditReady = true;
+    }, 50);
+
+    function cleanup() {
       inlineEditInput.removeEventListener('keydown', onKey);
       inlineEditInput.removeEventListener('blur', onBlur);
+    }
+    function commit() {
+      if (!inlineEditReady) return; // Ignore premature blur
+      const val = inlineEditInput.value.trim();
+      inlineEdit.style.display = 'none';
+      cleanup();
       if (val && val !== currentValue) onCommit(val);
     }
     function onKey(e) {
       if (e.key === 'Enter') { e.preventDefault(); commit(); }
       if (e.key === 'Escape') {
         inlineEdit.style.display = 'none';
-        inlineEditInput.removeEventListener('keydown', onKey);
-        inlineEditInput.removeEventListener('blur', onBlur);
+        cleanup();
       }
     }
-    function onBlur() { commit(); }
+    function onBlur() { setTimeout(() => commit(), 100); }
     inlineEditInput.addEventListener('keydown', onKey);
     inlineEditInput.addEventListener('blur', onBlur);
   }
+
+  // Stop SVG mousedown from stealing focus from the inline edit input
+  inlineEdit.addEventListener('mousedown', (e) => e.stopPropagation());
 
   // ── Context menu ──
   function showContextMenu(x, y, items) {
