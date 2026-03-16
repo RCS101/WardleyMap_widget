@@ -628,32 +628,53 @@ function renderAll(svg, map, state) {
 // ═══════════════════════════════════════════════════════════════════════
 // PERSISTENCE
 // ═══════════════════════════════════════════════════════════════════════
-const STORAGE_KEY = 'wardley-widget-autosave';
+// Each embed gets its own storage key based on a unique map ID in the URL hash.
+// Format: #<mapId>:<lz-compressed-data>  or just #<mapId> for a new map.
+// A bare URL with no hash always starts a fresh blank map and assigns a new ID.
+let _mapId = '';
+
+function getStorageKey() {
+  return 'wardley-widget-' + _mapId;
+}
 
 function saveToLocalStorage(map) {
-  try { localStorage.setItem(STORAGE_KEY, serializeOWM(map)); } catch(e) {}
+  if (!_mapId) return;
+  try { localStorage.setItem(getStorageKey(), serializeOWM(map)); } catch(e) {}
 }
 
 function loadFromLocalStorage() {
+  if (!_mapId) return null;
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = localStorage.getItem(getStorageKey());
     if (data) return parseOWM(data);
   } catch(e) {}
   return null;
 }
 
+function generateMapId() {
+  return 'm' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+}
+
 function encodeToHash(map) {
   const owm = serializeOWM(map);
-  return LZString.compressToEncodedURIComponent(owm);
+  const compressed = LZString.compressToEncodedURIComponent(owm);
+  return _mapId + ':' + compressed;
 }
 
 function decodeFromHash(hash) {
-  if (!hash) return null;
+  if (!hash) return { id: '', map: null };
+  const colonIdx = hash.indexOf(':');
+  if (colonIdx === -1) {
+    // Hash is just a map ID with no data — load from localStorage
+    return { id: hash, map: null };
+  }
+  const id = hash.substring(0, colonIdx);
+  const compressed = hash.substring(colonIdx + 1);
   try {
-    const owm = LZString.decompressFromEncodedURIComponent(hash);
-    if (owm) return parseOWM(owm);
+    const owm = LZString.decompressFromEncodedURIComponent(compressed);
+    if (owm) return { id, map: parseOWM(owm) };
   } catch(e) {}
-  return null;
+  return { id, map: null };
 }
 
 function exportOWMFile(map) {
@@ -741,13 +762,25 @@ function showToast(msg) {
   };
 
   // ── Load initial map ──
+  // Each embed URL is a unique map instance.
+  // No hash = brand new blank map (assign a fresh ID).
+  // Hash with data = shared map (load from hash).
+  // Hash with ID only = returning to a map (load from localStorage).
   const hash = window.location.hash.substring(1);
   if (hash) {
-    const loaded = decodeFromHash(hash);
-    if (loaded) map = loaded;
+    const result = decodeFromHash(hash);
+    _mapId = result.id;
+    if (result.map) {
+      map = result.map;
+    } else {
+      const saved = loadFromLocalStorage();
+      if (saved) map = saved;
+    }
   } else {
-    const saved = loadFromLocalStorage();
-    if (saved) map = saved;
+    // New embed — fresh blank map with a new unique ID
+    _mapId = generateMapId();
+    // Update URL so reloads return to this same map
+    history.replaceState(null, '', '#' + _mapId);
   }
   titleInput.value = map.title;
 
