@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wardley Map Widget</title>
+<style>
+/* ── Reset & Base ────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #333; }
+#app { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+/* ── Toolbar ─────────────────────────────────────────── */
+#toolbar {
+  display: flex; align-items: center; gap: 4px; padding: 6px 10px;
+  background: #f7f7f7; border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0; flex-wrap: wrap; z-index: 10;
+}
+#toolbar .title-input {
+  font-size: 14px; font-weight: 600; border: 1px solid transparent;
+  background: transparent; padding: 4px 8px; border-radius: 4px; min-width: 180px;
+}
+#toolbar .title-input:hover { border-color: #ccc; }
+#toolbar .title-input:focus { border-color: #4a9eff; outline: none; background: #fff; }
+#toolbar .sep { width: 1px; height: 24px; background: #ddd; margin: 0 4px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px;
+  font-size: 12px; border: 1px solid #ccc; border-radius: 4px;
+  background: #fff; cursor: pointer; color: #333; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn:hover { background: #eee; border-color: #bbb; }
+.btn.active { background: #e0edff; border-color: #4a9eff; color: #1a6ed8; }
+.btn svg { width: 14px; height: 14px; }
+#toolbar .right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+#status-bar {
+  font-size: 11px; color: #888; padding: 0 8px;
+}
+
+/* ── SVG Container ───────────────────────────────────── */
+#map-container { flex: 1; position: relative; overflow: hidden; cursor: default; }
+#map-svg { width: 100%; height: 100%; }
+
+/* ── SVG Styles ──────────────────────────────────────── */
+.axis-line { stroke: #ccc; stroke-width: 1; }
+.axis-label { font-size: 11px; fill: #999; font-family: inherit; }
+.axis-stage-label { font-size: 10px; fill: #bbb; font-family: inherit; text-anchor: middle; }
+.axis-title { font-size: 11px; fill: #888; font-family: inherit; font-weight: 600; }
+.evolution-separator { stroke: #e8e8e8; stroke-width: 1; stroke-dasharray: 4 4; }
+
+.component-node { cursor: grab; }
+.component-node:active { cursor: grabbing; }
+.component-circle { fill: #fff; stroke: #333; stroke-width: 2; r: 6; }
+.component-circle.anchor { fill: #ff6b6b; stroke: #c0392b; }
+.component-circle:hover { stroke-width: 3; }
+.component-circle.selected { stroke: #4a9eff; stroke-width: 3; fill: #e0edff; }
+.component-circle.selected.anchor { fill: #ffaaaa; }
+.component-label { font-size: 11px; fill: #333; font-family: inherit; pointer-events: all; cursor: pointer; }
+.component-label:hover { fill: #1a6ed8; }
+
+.pipeline-rect { fill: rgba(200, 200, 200, 0.15); stroke: #bbb; stroke-width: 1.5; stroke-dasharray: 6 3; rx: 6; ry: 6; }
+
+.edge-line { stroke: #999; stroke-width: 1.5; fill: none; }
+.edge-line:hover { stroke: #4a9eff; stroke-width: 2.5; }
+.edge-line.selected { stroke: #4a9eff; stroke-width: 2.5; }
+.edge-hit-area { stroke: transparent; stroke-width: 12; fill: none; cursor: pointer; }
+.edge-label { font-size: 9px; fill: #777; font-family: inherit; }
+
+.edge-preview { stroke: #4a9eff; stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; pointer-events: none; }
+
+/* ── Inline edit overlay ─────────────────────────────── */
+#inline-edit {
+  position: absolute; display: none; z-index: 20;
+}
+#inline-edit input {
+  font-size: 12px; font-family: inherit; padding: 2px 6px;
+  border: 2px solid #4a9eff; border-radius: 3px; outline: none;
+  min-width: 120px; background: #fff;
+}
+
+/* ── Context menu ────────────────────────────────────── */
+#context-menu {
+  position: absolute; display: none; z-index: 30;
+  background: #fff; border: 1px solid #ddd; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12); padding: 4px 0; min-width: 150px;
+}
+#context-menu .menu-item {
+  padding: 6px 14px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+}
+#context-menu .menu-item:hover { background: #f0f4ff; }
+#context-menu .menu-item.danger { color: #e74c3c; }
+#context-menu .menu-sep { height: 1px; background: #eee; margin: 4px 0; }
+
+/* ── Toast ───────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #333; color: #fff; padding: 8px 18px; border-radius: 6px;
+  font-size: 12px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 40;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <input class="title-input" id="map-title" type="text" value="Untitled Map" spellcheck="false">
+    <div class="sep"></div>
+    <button class="btn" id="btn-add-node" title="Add Component (click on map)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Add Node
+    </button>
+    <button class="btn" id="btn-add-anchor" title="Add Anchor (user need)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,4 20,20 4,20"/></svg>
+      Add Anchor
+    </button>
+    <button class="btn" id="btn-add-edge" title="Draw Edge (click source then target)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="14,5 19,5 19,10"/></svg>
+      Add Edge
+    </button>
+    <button class="btn" id="btn-delete" title="Delete selected (or press Delete key)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      Delete
+    </button>
+    <div class="sep"></div>
+    <button class="btn" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn" id="btn-redo" title="Redo (Ctrl+Y)">Redo</button>
+    <div class="right">
+      <span id="status-bar"></span>
+      <button class="btn" id="btn-import" title="Import .owm file">Import</button>
+      <button class="btn" id="btn-export" title="Export as .owm file">Export</button>
+      <button class="btn" id="btn-share" title="Copy shareable embed URL">Share</button>
+    </div>
+  </div>
+  <div id="map-container">
+    <svg id="map-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div id="inline-edit"><input id="inline-edit-input" type="text"></div>
+  <div id="context-menu"></div>
+  <div id="toast"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// LZ-String (minified) - Copyright (c) 2013 Pieroxy - MIT License
+// ═══════════════════════════════════════════════════════════════════════
+var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o,n){if(!e[r]){e[r]={};for(var t=0;t<r.length;t++)e[r][r.charAt(t)]=t}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=a}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(o){return null==o?"":""==o?null:i._decompress(o.length,32768,function(r){return o.charCodeAt(r)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();
+
+// ═══════════════════════════════════════════════════════════════════════
+// DATA MODEL
+// ═══════════════════════════════════════════════════════════════════════
+let _idCounter = 0;
+function genId() { return 'n' + (++_idCounter) + '_' + Date.now().toString(36); }
+
+function createMap() {
+  return {
+    title: 'Untitled Map',
+    components: [],  // { id, name, visibility, evolution, isAnchor }
+    pipelines: [],   // { id, parentName, children: [{ name, evolution }] }
+    edges: [],       // { id, from (name), to (name), label? }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// OWM PARSER
+// ═══════════════════════════════════════════════════════════════════════
+function parseOWM(text) {
+  const map = createMap();
+  const lines = text.split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    i++;
+    if (!line || line.startsWith('//')) continue;
+
+    // title
+    if (line.startsWith('title ')) {
+      map.title = line.substring(6).trim();
+      continue;
+    }
+
+    // anchor "Name" [vis, evo]
+    let m = line.match(/^anchor\s+"([^"]+)"\s+\[([0-9.]+),\s*([0-9.]+)\]/);
+    if (m) {
+      map.components.push({ id: genId(), name: m[1], visibility: parseFloat(m[2]), evolution: parseFloat(m[3]), isAnchor: true });
+      continue;
+    }
+
+    // pipeline "Name" { ... }
+    m = line.match(/^pipeline\s+"([^"]+)"\s*$/);
+    if (m) {
+      const pipelineName = m[1];
+      const children = [];
+      // Next line should be {
+      while (i < lines.length) {
+        const pLine = lines[i].trim();
+        i++;
+        if (pLine === '{') continue;
+        if (pLine === '}') break;
+        const cm = pLine.match(/component\s+"([^"]+)"\s+\[([0-9.]+)\]/);
+        if (cm) {
+          children.push({ name: cm[1], evolution: parseFloat(cm[2]) });
+        }
+      }
+      map.pipelines.push({ id: genId(), parentName: pipelineName, children });
+      continue;
+    }
+
+    // component "Name" [vis, evo]
+    m = line.match(/^component\s+"([^"]+)"\s+\[([0-9.]+),\s*([0-9.]+)\]/);
+    if (m) {
+      map.components.push({ id: genId(), name: m[1], visibility: parseFloat(m[2]), evolution: parseFloat(m[3]), isAnchor: false });
+      continue;
+    }
+
+    // edge "From"->"To" or "From"->"To"; label
+    m = line.match(/^"([^"]+)"\s*->\s*"([^"]+)"(?:\s*;\s*(.+))?$/);
+    if (m) {
+      map.edges.push({ id: genId(), from: m[1], to: m[2], label: m[3] || '' });
+      continue;
+    }
+  }
+  return map;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// OWM SERIALIZER
+// ═══════════════════════════════════════════════════════════════════════
+function serializeOWM(map) {
+  const lines = [];
+  lines.push('title ' + map.title);
+  lines.push('');
+
+  // Anchors first
+  const anchors = map.components.filter(c => c.isAnchor);
+  const components = map.components.filter(c => !c.isAnchor);
+
+  for (const a of anchors) {
+    lines.push(`anchor "${a.name}" [${a.visibility.toFixed(2)}, ${a.evolution.toFixed(2)}]`);
+  }
+  if (anchors.length) lines.push('');
+
+  // Components (skip pipeline children as they're inline)
+  const pipelineChildNames = new Set();
+  for (const p of map.pipelines) {
+    for (const ch of p.children) pipelineChildNames.add(ch.name);
+  }
+
+  for (const c of components) {
+    if (pipelineChildNames.has(c.name)) continue;
+    lines.push(`component "${c.name}" [${c.visibility.toFixed(2)}, ${c.evolution.toFixed(2)}]`);
+
+    // Check if this component has a pipeline
+    const pipeline = map.pipelines.find(p => p.parentName === c.name);
+    if (pipeline && pipeline.children.length > 0) {
+      lines.push(`pipeline "${c.name}"`);
+      lines.push('{');
+      for (const ch of pipeline.children) {
+        lines.push(`  component "${ch.name}" [${ch.evolution.toFixed(2)}]`);
+      }
+      lines.push('}');
+    }
+    lines.push('');
+  }
+
+  // Edges
+  for (const e of map.edges) {
+    let edgeLine = `"${e.from}"->"${e.to}"`;
+    if (e.label) edgeLine += '; ' + e.label;
+    lines.push(edgeLine);
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAP LAYOUT CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════
+const PADDING = { top: 40, right: 30, bottom: 50, left: 50 };
+const EVOLUTION_LABELS = ['Genesis', 'Custom Built', 'Product (+rental)', 'Commodity (+utility)'];
+
+// ═══════════════════════════════════════════════════════════════════════
+// SVG HELPERS
+// ═══════════════════════════════════════════════════════════════════════
+function svgEl(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDERER
+// ═══════════════════════════════════════════════════════════════════════
+function getMapArea(svg) {
+  const w = svg.clientWidth || 800;
+  const h = svg.clientHeight || 600;
+  return {
+    x: PADDING.left, y: PADDING.top,
+    w: w - PADDING.left - PADDING.right,
+    h: h - PADDING.top - PADDING.bottom,
+    totalW: w, totalH: h,
+  };
+}
+
+function toSVGCoords(area, visibility, evolution) {
+  return {
+    x: area.x + evolution * area.w,
+    y: area.y + (1 - visibility) * area.h,
+  };
+}
+
+function fromSVGCoords(area, sx, sy) {
+  return {
+    evolution: Math.max(0, Math.min(1, (sx - area.x) / area.w)),
+    visibility: Math.max(0, Math.min(1, 1 - (sy - area.y) / area.h)),
+  };
+}
+
+function renderAxes(svg, area) {
+  const g = svgEl('g', { class: 'axes-group' });
+
+  // Bounding box
+  g.appendChild(svgEl('line', { x1: area.x, y1: area.y, x2: area.x, y2: area.y + area.h, class: 'axis-line' }));
+  g.appendChild(svgEl('line', { x1: area.x, y1: area.y + area.h, x2: area.x + area.w, y2: area.y + area.h, class: 'axis-line' }));
+
+  // Evolution separators and labels
+  for (let i = 0; i < 4; i++) {
+    const xFrac = (i + 0.5) / 4;
+    const cx = area.x + xFrac * area.w;
+    const label = svgEl('text', { x: cx, y: area.y + area.h + 18, class: 'axis-stage-label' });
+    label.textContent = EVOLUTION_LABELS[i];
+    g.appendChild(label);
+
+    if (i > 0) {
+      const sepX = area.x + (i / 4) * area.w;
+      g.appendChild(svgEl('line', { x1: sepX, y1: area.y, x2: sepX, y2: area.y + area.h, class: 'evolution-separator' }));
+    }
+  }
+
+  // Y-axis labels
+  const yTop = svgEl('text', { x: area.x - 8, y: area.y + 4, class: 'axis-label', 'text-anchor': 'end' });
+  yTop.textContent = 'Visible';
+  g.appendChild(yTop);
+  const yBot = svgEl('text', { x: area.x - 8, y: area.y + area.h, class: 'axis-label', 'text-anchor': 'end' });
+  yBot.textContent = 'Invisible';
+  g.appendChild(yBot);
+
+  // Axis titles
+  const xTitle = svgEl('text', { x: area.x + area.w / 2, y: area.y + area.h + 38, class: 'axis-title', 'text-anchor': 'middle' });
+  xTitle.textContent = 'Evolution';
+  g.appendChild(xTitle);
+
+  // Y-axis title (rotated)
+  const yTitle = svgEl('text', { x: 14, y: area.y + area.h / 2, class: 'axis-title', 'text-anchor': 'middle', transform: `rotate(-90, 14, ${area.y + area.h / 2})` });
+  yTitle.textContent = 'Value Chain';
+  g.appendChild(yTitle);
+
+  svg.appendChild(g);
+}
+
+function renderPipelines(svg, area, map) {
+  const g = svgEl('g', { class: 'pipelines-group' });
+  for (const pipeline of map.pipelines) {
+    const parent = map.components.find(c => c.name === pipeline.parentName);
+    if (!parent || pipeline.children.length === 0) continue;
+
+    const parentCoords = toSVGCoords(area, parent.visibility, parent.evolution);
+    const evolutions = pipeline.children.map(ch => ch.evolution);
+    const minEvo = Math.min(...evolutions);
+    const maxEvo = Math.max(...evolutions);
+    const margin = 0.03;
+
+    const left = area.x + (minEvo - margin) * area.w;
+    const right = area.x + (maxEvo + margin) * area.w;
+    const top = parentCoords.y - 18;
+    const bottom = parentCoords.y + 18;
+
+    const rect = svgEl('rect', {
+      x: left, y: top, width: right - left, height: bottom - top, class: 'pipeline-rect',
+    });
+    g.appendChild(rect);
+  }
+  svg.appendChild(g);
+}
+
+function renderEdges(svg, area, map, state) {
+  const g = svgEl('g', { class: 'edges-group' });
+  for (const edge of map.edges) {
+    const fromComp = map.components.find(c => c.name === edge.from);
+    const toComp = map.components.find(c => c.name === edge.to);
+    if (!fromComp || !toComp) continue;
+
+    const fc = toSVGCoords(area, fromComp.visibility, fromComp.evolution);
+    const tc = toSVGCoords(area, toComp.visibility, toComp.evolution);
+
+    const eg = svgEl('g', { 'data-edge-id': edge.id });
+
+    // Invisible wider hit area for easier clicking
+    const hitArea = svgEl('line', { x1: fc.x, y1: fc.y, x2: tc.x, y2: tc.y, class: 'edge-hit-area' });
+    hitArea.dataset.edgeId = edge.id;
+    eg.appendChild(hitArea);
+
+    const line = svgEl('line', {
+      x1: fc.x, y1: fc.y, x2: tc.x, y2: tc.y,
+      class: 'edge-line' + (state.selectedId === edge.id ? ' selected' : ''),
+    });
+    line.dataset.edgeId = edge.id;
+    eg.appendChild(line);
+
+    if (edge.label) {
+      const mx = (fc.x + tc.x) / 2;
+      const my = (fc.y + tc.y) / 2;
+      const label = svgEl('text', { x: mx, y: my - 6, class: 'edge-label', 'text-anchor': 'middle' });
+      label.textContent = edge.label;
+      eg.appendChild(label);
+    }
+
+    g.appendChild(eg);
+  }
+  svg.appendChild(g);
+}
+
+function renderComponents(svg, area, map, state) {
+  const g = svgEl('g', { class: 'components-group' });
+
+  // Collect pipeline children coords (they inherit parent visibility)
+  const pipelineChildMap = new Map();
+  for (const pipeline of map.pipelines) {
+    const parent = map.components.find(c => c.name === pipeline.parentName);
+    if (!parent) continue;
+    for (const ch of pipeline.children) {
+      pipelineChildMap.set(ch.name, { visibility: parent.visibility, evolution: ch.evolution });
+    }
+  }
+
+  // Render all components
+  for (const comp of map.components) {
+    const coords = toSVGCoords(area, comp.visibility, comp.evolution);
+    const nodeG = svgEl('g', { class: 'component-node', 'data-comp-id': comp.id });
+    nodeG.dataset.compId = comp.id;
+
+    const circle = svgEl('circle', {
+      cx: coords.x, cy: coords.y,
+      class: 'component-circle' + (comp.isAnchor ? ' anchor' : '') + (state.selectedId === comp.id ? ' selected' : ''),
+    });
+    circle.dataset.compId = comp.id;
+    nodeG.appendChild(circle);
+
+    const label = svgEl('text', {
+      x: coords.x + 10, y: coords.y - 10,
+      class: 'component-label',
+    });
+    label.textContent = comp.name;
+    label.dataset.compId = comp.id;
+    nodeG.appendChild(label);
+
+    g.appendChild(nodeG);
+  }
+
+  // Render pipeline children
+  for (const pipeline of map.pipelines) {
+    const parent = map.components.find(c => c.name === pipeline.parentName);
+    if (!parent) continue;
+    for (const ch of pipeline.children) {
+      const coords = toSVGCoords(area, parent.visibility, ch.evolution);
+      const nodeG = svgEl('g', { class: 'component-node pipeline-child' });
+
+      const circle = svgEl('circle', {
+        cx: coords.x, cy: coords.y,
+        class: 'component-circle',
+        r: 5,
+      });
+      nodeG.appendChild(circle);
+
+      const label = svgEl('text', {
+        x: coords.x + 8, y: coords.y - 8,
+        class: 'component-label',
+        'font-size': '9px',
+      });
+      label.textContent = ch.name;
+      nodeG.appendChild(label);
+
+      g.appendChild(nodeG);
+    }
+  }
+
+  svg.appendChild(g);
+}
+
+function renderAll(svg, map, state) {
+  svg.innerHTML = '';
+  const area = getMapArea(svg);
+  renderAxes(svg, area);
+  renderPipelines(svg, area, map);
+  renderEdges(svg, area, map, state);
+  renderComponents(svg, area, map, state);
+
+  // Edge preview line (for drawing edges)
+  const preview = svgEl('line', { x1: 0, y1: 0, x2: 0, y2: 0, class: 'edge-preview', id: 'edge-preview', style: 'display:none' });
+  svg.appendChild(preview);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════════════════════════════
+const STORAGE_KEY = 'wardley-widget-autosave';
+
+function saveToLocalStorage(map) {
+  try { localStorage.setItem(STORAGE_KEY, serializeOWM(map)); } catch(e) {}
+}
+
+function loadFromLocalStorage() {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) return parseOWM(data);
+  } catch(e) {}
+  return null;
+}
+
+function encodeToHash(map) {
+  const owm = serializeOWM(map);
+  return LZString.compressToEncodedURIComponent(owm);
+}
+
+function decodeFromHash(hash) {
+  if (!hash) return null;
+  try {
+    const owm = LZString.decompressFromEncodedURIComponent(hash);
+    if (owm) return parseOWM(owm);
+  } catch(e) {}
+  return null;
+}
+
+function exportOWMFile(map) {
+  const owm = serializeOWM(map);
+  const blob = new Blob([owm], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (map.title || 'wardley-map').replace(/[^a-zA-Z0-9_ -]/g, '') + '.owm';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importOWMFile() {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.owm,.txt';
+    input.onchange = () => {
+      const file = input.files[0];
+      if (!file) { resolve(null); return; }
+      const reader = new FileReader();
+      reader.onload = () => resolve(parseOWM(reader.result));
+      reader.readAsText(file);
+    };
+    input.click();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UNDO/REDO
+// ═══════════════════════════════════════════════════════════════════════
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 50;
+
+function pushUndo(map) {
+  undoStack.push(serializeOWM(map));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function undo(currentMap) {
+  if (undoStack.length === 0) return null;
+  redoStack.push(serializeOWM(currentMap));
+  return parseOWM(undoStack.pop());
+}
+
+function redo(currentMap) {
+  if (redoStack.length === 0) return null;
+  undoStack.push(serializeOWM(currentMap));
+  return parseOWM(redoStack.pop());
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════════════
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN APPLICATION
+// ═══════════════════════════════════════════════════════════════════════
+(function main() {
+  const svg = document.getElementById('map-svg');
+  const container = document.getElementById('map-container');
+  const titleInput = document.getElementById('map-title');
+  const statusBar = document.getElementById('status-bar');
+  const inlineEdit = document.getElementById('inline-edit');
+  const inlineEditInput = document.getElementById('inline-edit-input');
+  const contextMenu = document.getElementById('context-menu');
+
+  // ── State ──
+  let map = createMap();
+  const state = {
+    mode: 'select',       // select | add-node | add-anchor | add-edge
+    selectedId: null,      // component or edge id
+    selectedType: null,    // 'component' | 'edge'
+    dragging: null,        // { compId, startX, startY, origVis, origEvo }
+    edgeSource: null,      // component id when drawing an edge
+  };
+
+  // ── Load initial map ──
+  const hash = window.location.hash.substring(1);
+  if (hash) {
+    const loaded = decodeFromHash(hash);
+    if (loaded) map = loaded;
+  } else {
+    const saved = loadFromLocalStorage();
+    if (saved) map = saved;
+  }
+  titleInput.value = map.title;
+
+  function render() {
+    renderAll(svg, map, state);
+    saveToLocalStorage(map);
+    updateStatusBar();
+  }
+
+  function updateStatusBar() {
+    const modeLabels = { 'select': 'Select', 'add-node': 'Click to place node', 'add-anchor': 'Click to place anchor', 'add-edge': state.edgeSource ? 'Click target node' : 'Click source node' };
+    statusBar.textContent = modeLabels[state.mode] || '';
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    state.edgeSource = null;
+    document.getElementById('btn-add-node').classList.toggle('active', mode === 'add-node');
+    document.getElementById('btn-add-anchor').classList.toggle('active', mode === 'add-anchor');
+    document.getElementById('btn-add-edge').classList.toggle('active', mode === 'add-edge');
+    container.style.cursor = mode === 'select' ? 'default' : 'crosshair';
+    updateStatusBar();
+    hideEdgePreview();
+  }
+
+  function selectItem(id, type) {
+    state.selectedId = id;
+    state.selectedType = type;
+    render();
+  }
+
+  function clearSelection() {
+    state.selectedId = null;
+    state.selectedType = null;
+    render();
+  }
+
+  function hideEdgePreview() {
+    const preview = document.getElementById('edge-preview');
+    if (preview) preview.style.display = 'none';
+  }
+
+  // ── Inline editing ──
+  function showInlineEdit(x, y, currentValue, onCommit) {
+    inlineEdit.style.display = 'block';
+    inlineEdit.style.left = x + 'px';
+    inlineEdit.style.top = y + 'px';
+    inlineEditInput.value = currentValue;
+    inlineEditInput.focus();
+    inlineEditInput.select();
+
+    function commit() {
+      const val = inlineEditInput.value.trim();
+      inlineEdit.style.display = 'none';
+      inlineEditInput.removeEventListener('keydown', onKey);
+      inlineEditInput.removeEventListener('blur', onBlur);
+      if (val && val !== currentValue) onCommit(val);
+    }
+    function onKey(e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') {
+        inlineEdit.style.display = 'none';
+        inlineEditInput.removeEventListener('keydown', onKey);
+        inlineEditInput.removeEventListener('blur', onBlur);
+      }
+    }
+    function onBlur() { commit(); }
+    inlineEditInput.addEventListener('keydown', onKey);
+    inlineEditInput.addEventListener('blur', onBlur);
+  }
+
+  // ── Context menu ──
+  function showContextMenu(x, y, items) {
+    contextMenu.innerHTML = '';
+    for (const item of items) {
+      if (item === 'sep') {
+        const sep = document.createElement('div');
+        sep.className = 'menu-sep';
+        contextMenu.appendChild(sep);
+      } else {
+        const div = document.createElement('div');
+        div.className = 'menu-item' + (item.danger ? ' danger' : '');
+        div.textContent = item.label;
+        div.onclick = () => { contextMenu.style.display = 'none'; item.action(); };
+        contextMenu.appendChild(div);
+      }
+    }
+    contextMenu.style.display = 'block';
+    contextMenu.style.left = x + 'px';
+    contextMenu.style.top = y + 'px';
+  }
+
+  document.addEventListener('click', () => { contextMenu.style.display = 'none'; });
+
+  // ── SVG event handlers ──
+  function getSVGPoint(e) {
+    const rect = svg.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  svg.addEventListener('mousedown', (e) => {
+    const pt = getSVGPoint(e);
+    const area = getMapArea(svg);
+    const target = e.target;
+
+    // Right-click context menu
+    if (e.button === 2) {
+      e.preventDefault();
+      const compId = target.dataset?.compId || target.closest?.('[data-comp-id]')?.dataset?.compId;
+      const edgeId = target.dataset?.edgeId;
+      if (compId) {
+        const comp = map.components.find(c => c.id === compId);
+        if (comp) {
+          selectItem(compId, 'component');
+          showContextMenu(e.clientX, e.clientY, [
+            { label: 'Rename', action: () => renameComponent(comp, pt) },
+            'sep',
+            { label: 'Delete', danger: true, action: () => deleteSelected() },
+          ]);
+        }
+      } else if (edgeId) {
+        const edge = map.edges.find(ed => ed.id === edgeId);
+        if (edge) {
+          selectItem(edgeId, 'edge');
+          showContextMenu(e.clientX, e.clientY, [
+            { label: 'Add/Edit Label', action: () => renameEdge(edge, pt) },
+            'sep',
+            { label: 'Delete', danger: true, action: () => deleteSelected() },
+          ]);
+        }
+      }
+      return;
+    }
+
+    if (e.button !== 0) return;
+
+    // ── Add node/anchor mode ──
+    if (state.mode === 'add-node' || state.mode === 'add-anchor') {
+      const pos = fromSVGCoords(area, pt.x, pt.y);
+      const isAnchor = state.mode === 'add-anchor';
+      const containerRect = container.getBoundingClientRect();
+      showInlineEdit(e.clientX - containerRect.left, e.clientY - containerRect.top - 30, '', (name) => {
+        pushUndo(map);
+        map.components.push({
+          id: genId(), name, visibility: pos.visibility, evolution: pos.evolution, isAnchor,
+        });
+        render();
+      });
+      setMode('select');
+      return;
+    }
+
+    // ── Add edge mode ──
+    if (state.mode === 'add-edge') {
+      const compId = target.dataset?.compId || target.closest?.('[data-comp-id]')?.dataset?.compId;
+      if (compId) {
+        const comp = map.components.find(c => c.id === compId);
+        if (!comp) return;
+        if (!state.edgeSource) {
+          state.edgeSource = comp;
+          selectItem(compId, 'component');
+          updateStatusBar();
+        } else if (comp.id !== state.edgeSource.id) {
+          pushUndo(map);
+          map.edges.push({ id: genId(), from: state.edgeSource.name, to: comp.name, label: '' });
+          state.edgeSource = null;
+          setMode('select');
+          render();
+        }
+      }
+      return;
+    }
+
+    // ── Select mode ──
+    const compId = target.dataset?.compId || target.closest?.('[data-comp-id]')?.dataset?.compId;
+    const edgeId = target.dataset?.edgeId;
+
+    if (compId) {
+      const comp = map.components.find(c => c.id === compId);
+      if (!comp) return;
+      selectItem(compId, 'component');
+
+      // Start drag
+      state.dragging = { compId, startX: pt.x, startY: pt.y, origVis: comp.visibility, origEvo: comp.evolution };
+    } else if (edgeId) {
+      selectItem(edgeId, 'edge');
+    } else {
+      clearSelection();
+    }
+  });
+
+  svg.addEventListener('mousemove', (e) => {
+    const pt = getSVGPoint(e);
+    const area = getMapArea(svg);
+
+    // Drag component
+    if (state.dragging) {
+      const comp = map.components.find(c => c.id === state.dragging.compId);
+      if (!comp) return;
+      const dx = pt.x - state.dragging.startX;
+      const dy = pt.y - state.dragging.startY;
+      comp.evolution = Math.max(0, Math.min(1, state.dragging.origEvo + dx / area.w));
+      comp.visibility = Math.max(0, Math.min(1, state.dragging.origVis - dy / area.h));
+      render();
+    }
+
+    // Edge preview
+    if (state.mode === 'add-edge' && state.edgeSource) {
+      const fromCoords = toSVGCoords(area, state.edgeSource.visibility, state.edgeSource.evolution);
+      const preview = document.getElementById('edge-preview');
+      if (preview) {
+        preview.setAttribute('x1', fromCoords.x);
+        preview.setAttribute('y1', fromCoords.y);
+        preview.setAttribute('x2', pt.x);
+        preview.setAttribute('y2', pt.y);
+        preview.style.display = '';
+      }
+    }
+  });
+
+  svg.addEventListener('mouseup', () => {
+    if (state.dragging) {
+      const comp = map.components.find(c => c.id === state.dragging.compId);
+      if (comp && (comp.visibility !== state.dragging.origVis || comp.evolution !== state.dragging.origEvo)) {
+        // Push undo with original state
+        const origMap = parseOWM(serializeOWM(map));
+        const origComp = origMap.components.find(c => c.name === comp.name);
+        if (origComp) { origComp.visibility = state.dragging.origVis; origComp.evolution = state.dragging.origEvo; }
+        undoStack.push(serializeOWM(origMap));
+        if (undoStack.length > MAX_UNDO) undoStack.shift();
+        redoStack.length = 0;
+      }
+      state.dragging = null;
+      render();
+    }
+  });
+
+  // Double-click to rename
+  svg.addEventListener('dblclick', (e) => {
+    const target = e.target;
+    const compId = target.dataset?.compId || target.closest?.('[data-comp-id]')?.dataset?.compId;
+    if (compId) {
+      const comp = map.components.find(c => c.id === compId);
+      if (comp) {
+        const pt = getSVGPoint(e);
+        renameComponent(comp, pt);
+      }
+    }
+  });
+
+  function renameComponent(comp, pt) {
+    const containerRect = container.getBoundingClientRect();
+    showInlineEdit(pt.x, pt.y - 30, comp.name, (newName) => {
+      pushUndo(map);
+      // Update edge references
+      for (const edge of map.edges) {
+        if (edge.from === comp.name) edge.from = newName;
+        if (edge.to === comp.name) edge.to = newName;
+      }
+      // Update pipeline references
+      for (const p of map.pipelines) {
+        if (p.parentName === comp.name) p.parentName = newName;
+      }
+      comp.name = newName;
+      render();
+    });
+  }
+
+  function renameEdge(edge, pt) {
+    const containerRect = container.getBoundingClientRect();
+    showInlineEdit(pt.x, pt.y - 30, edge.label || '', (newLabel) => {
+      pushUndo(map);
+      edge.label = newLabel;
+      render();
+    });
+  }
+
+  // ── Delete ──
+  function deleteSelected() {
+    if (!state.selectedId) return;
+    pushUndo(map);
+    if (state.selectedType === 'component') {
+      const comp = map.components.find(c => c.id === state.selectedId);
+      if (comp) {
+        // Remove edges referencing this component
+        map.edges = map.edges.filter(e => e.from !== comp.name && e.to !== comp.name);
+        // Remove pipelines for this component
+        map.pipelines = map.pipelines.filter(p => p.parentName !== comp.name);
+        // Remove component
+        map.components = map.components.filter(c => c.id !== state.selectedId);
+      }
+    } else if (state.selectedType === 'edge') {
+      map.edges = map.edges.filter(e => e.id !== state.selectedId);
+    }
+    clearSelection();
+  }
+
+  // ── Prevent context menu ──
+  svg.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ── Keyboard shortcuts ──
+  document.addEventListener('keydown', (e) => {
+    // Don't capture when editing
+    if (e.target.tagName === 'INPUT') return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      deleteSelected();
+    }
+    if (e.key === 'Escape') {
+      setMode('select');
+      clearSelection();
+    }
+    if (e.ctrlKey && e.key === 'z') {
+      e.preventDefault();
+      const prev = undo(map);
+      if (prev) { map = prev; titleInput.value = map.title; clearSelection(); }
+    }
+    if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+      e.preventDefault();
+      const next = redo(map);
+      if (next) { map = next; titleInput.value = map.title; clearSelection(); }
+    }
+  });
+
+  // ── Toolbar buttons ──
+  document.getElementById('btn-add-node').onclick = () => setMode(state.mode === 'add-node' ? 'select' : 'add-node');
+  document.getElementById('btn-add-anchor').onclick = () => setMode(state.mode === 'add-anchor' ? 'select' : 'add-anchor');
+  document.getElementById('btn-add-edge').onclick = () => setMode(state.mode === 'add-edge' ? 'select' : 'add-edge');
+  document.getElementById('btn-delete').onclick = () => deleteSelected();
+  document.getElementById('btn-undo').onclick = () => {
+    const prev = undo(map);
+    if (prev) { map = prev; titleInput.value = map.title; clearSelection(); }
+  };
+  document.getElementById('btn-redo').onclick = () => {
+    const next = redo(map);
+    if (next) { map = next; titleInput.value = map.title; clearSelection(); }
+  };
+
+  titleInput.addEventListener('change', () => {
+    pushUndo(map);
+    map.title = titleInput.value.trim() || 'Untitled Map';
+    saveToLocalStorage(map);
+  });
+
+  document.getElementById('btn-import').onclick = async () => {
+    const imported = await importOWMFile();
+    if (imported) {
+      pushUndo(map);
+      map = imported;
+      titleInput.value = map.title;
+      render();
+      showToast('Map imported');
+    }
+  };
+
+  document.getElementById('btn-export').onclick = () => {
+    exportOWMFile(map);
+    showToast('Map exported');
+  };
+
+  document.getElementById('btn-share').onclick = () => {
+    const hash = encodeToHash(map);
+    const url = window.location.origin + window.location.pathname + '#' + hash;
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('Shareable URL copied to clipboard');
+    }).catch(() => {
+      // Fallback: show URL in prompt
+      prompt('Copy this URL:', url);
+    });
+  };
+
+  // ── Resize handling ──
+  const resizeObserver = new ResizeObserver(() => render());
+  resizeObserver.observe(container);
+
+  // ── Initial render ──
+  render();
+})();
+</script>
+</body>
+</html>
